@@ -17,6 +17,14 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 )
 
+type Role int
+
+const (
+	RoleUnknown Role = iota
+	RoleServer
+	RoleClient
+)
+
 type Device struct {
 	state struct {
 		// state holds the device's state. It is accessed atomically.
@@ -89,6 +97,9 @@ type Device struct {
 	ipcMutex sync.RWMutex
 	closed   chan struct{}
 	log      *Logger
+
+	// Server || client
+	role Role
 }
 
 // deviceState represents the state of a Device.
@@ -281,7 +292,21 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 	return nil
 }
 
-func NewDevice(tunDevice tun.Device, bind conn.Bind, logger *Logger) *Device {
+type Option func(*Device)
+
+func WithServerRole() Option {
+	return func(dev *Device) {
+		dev.role = RoleServer
+	}
+}
+
+func WithClientRole() Option {
+	return func(dev *Device) {
+		dev.role = RoleClient
+	}
+}
+
+func NewDevice(tunDevice tun.Device, bind conn.Bind, logger *Logger, opts ...Option) *Device {
 	device := new(Device)
 	device.state.state.Store(uint32(deviceStateDown))
 	device.closed = make(chan struct{})
@@ -299,6 +324,10 @@ func NewDevice(tunDevice tun.Device, bind conn.Bind, logger *Logger) *Device {
 	device.indexTable.Init()
 
 	device.PopulatePools()
+
+	for _, opt := range opts {
+		opt(device)
+	}
 
 	// create queues
 

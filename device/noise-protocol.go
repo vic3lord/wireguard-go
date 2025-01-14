@@ -8,6 +8,7 @@ package device
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -280,7 +281,32 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 
 	peer := device.LookupPeer(peerPK)
 	if peer == nil || !peer.isRunning.Load() {
-		return nil
+		if device.role != RoleServer {
+			return nil
+		}
+
+		peer, err = device.NewPeer(peerPK)
+		if err != nil {
+			return nil
+		}
+
+		device.log.Verbosef("Parsing IP!")
+		addr, err := netip.ParseAddr("0.0.0.0")
+		if err != nil {
+			return nil
+		}
+
+		if p := device.allowedips.Lookup(addr.AsSlice()); p == nil {
+			device.log.Verbosef("Parsing Prefix!")
+			prefix, err := netip.ParsePrefix("0.0.0.0/0")
+			if err != nil {
+				return nil
+			}
+
+			device.log.Verbosef("Inserting!")
+			device.allowedips.Insert(prefix, peer)
+		}
+		peer.Start()
 	}
 
 	handshake := &peer.handshake

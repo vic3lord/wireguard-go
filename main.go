@@ -30,6 +30,9 @@ const (
 	ENV_WG_TUN_FD             = "WG_TUN_FD"
 	ENV_WG_UAPI_FD            = "WG_UAPI_FD"
 	ENV_WG_PROCESS_FOREGROUND = "WG_PROCESS_FOREGROUND"
+
+	// WG_ROLE controls whether it's a server || client
+	ENV_WG_ROLE = "WG_ROLE"
 )
 
 func printUsage() {
@@ -222,7 +225,15 @@ func main() {
 		return
 	}
 
-	device := device.NewDevice(tdev, conn.NewDefaultBind(), logger)
+	var deviceOpts []device.Option
+	switch os.Getenv(ENV_WG_ROLE) {
+	case "server":
+		deviceOpts = append(deviceOpts, device.WithServerRole())
+	case "client":
+		deviceOpts = append(deviceOpts, device.WithClientRole())
+	}
+
+	device := device.NewDevice(tdev, conn.NewDefaultBind(), logger, deviceOpts...)
 
 	logger.Verbosef("Device started")
 
